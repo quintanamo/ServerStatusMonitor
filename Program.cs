@@ -26,16 +26,16 @@ namespace ServerStatusMonitor
 
         public class ServerStatusMonitorTray : ApplicationContext
         {
-            ConfigForm configForm = new ConfigForm();
-            System.Timers.Timer timer = new System.Timers.Timer();
-            Uri uri;
-            Ping ping = new Ping();
-            bool isPingable = false;
-            bool isMonitoring = false;
-            bool isNotified = false;
-            string siteToMonitor;
-            int interval;
-            private NotifyIcon trayIcon;
+            ConfigForm configForm = new ConfigForm();                   // window that pops up when clicking config in the tray
+            System.Timers.Timer timer = new System.Timers.Timer();      // the timer
+            Uri uri;                                                    // uri object used to convert full paths to host names
+            Ping ping = new Ping();                                     // ping object used to send and receive messages from the host
+            bool isPingable = false;                                    // determine if the server can be pinged (if a response is received)
+            bool isMonitoring = false;                                  // determine if the server is currently being monitored
+            bool isNotified = false;                                    // set to true on first failure so consecutive failures don't spam the user
+            string siteToMonitor;                                       // hostname/URL of server being monitored
+            int interval;                                               // time between each status check
+            private NotifyIcon trayIcon;                                // icon that appears in the Windows tray
 
             public ServerStatusMonitorTray()
             {
@@ -64,17 +64,23 @@ namespace ServerStatusMonitor
                 isMonitoring = !isMonitoring;
                 switch (isMonitoring)
                 {
+                    // while monitoring, load the settings from app.config
+                    // set the timer interval based on a user-defined value (max 7 days)
                     case true:
                         LoadSettings();
-                        Console.WriteLine("Target: " + siteToMonitor);
-                        Console.WriteLine("Interval: " + interval);
                         timer.Interval = interval > 0 ? interval * 1000 * 60 : 5 * 1000 * 60;
                         timer.Start();
                         PingURL();
+                        trayIcon.ContextMenu.MenuItems[0].Enabled = false;
                         trayIcon.ContextMenu.MenuItems[1].Text = "Stop";
                         break;
+                    // when monitoring is toggled to false, stop the timer
+                    // reset any variables used to track status
                     case false:
                         timer.Stop();
+                        isPingable = false;
+                        isNotified = false;
+                        trayIcon.ContextMenu.MenuItems[0].Enabled = true;
                         trayIcon.ContextMenu.MenuItems[1].Text = "Start";
                         trayIcon.Icon = Resources.AppIcon;
                         break;
@@ -105,32 +111,31 @@ namespace ServerStatusMonitor
 
             private void PingURL()
             {
-                uri = new Uri(siteToMonitor);
-                Console.WriteLine("Pinging host.");
+                uri = new Uri(siteToMonitor);                       // convert user-input value to pingable hostname
                 try
                 {
-                    PingReply reply = ping.Send(uri.Host);
-                    Console.WriteLine("Reply: " + reply.Status.ToString());
-                    isPingable = reply.Status == IPStatus.Success;
+                    PingReply reply = ping.Send(uri.Host);          // ping the host
+                    isPingable = reply.Status == IPStatus.Success;  // check if the ping was successful, update isPingable
                 }
                 catch (PingException ex)
                 {
-                    Console.WriteLine(ex.ToString());
+                    Console.WriteLine(ex.ToString());               // log any exceptions to the console.  exceptions may be caused by invalid host names
                 }
                 if (isPingable)
                 {
-                    trayIcon.Text = "Server is up and running.";
-                    trayIcon.Icon = Resources.AppIconUp;
-                    isNotified = false;
+                    trayIcon.Text = "Server is up and running.";    // on a successful ping, set the hover text to indicate server is running as expected
+                    trayIcon.Icon = Resources.AppIconUp;            // update the tray icon to show a green dot
+                    isNotified = false;                             // if an error was presented before, clear it so a new one may be used to alert the user
                 }
                 else
                 {
-                    trayIcon.Icon = Resources.AppIconDown;
-                    trayIcon.Text = "No response - server down!";
-                    if (!isNotified)
+                    trayIcon.Text = "No response - server down!";   // on a failed ping, set the hover text to indicate teh server is down
+                    trayIcon.Icon = Resources.AppIconDown;          // update the tray icon to show a red dot
+                    if (!isNotified)                                // if the user wasn't notified, display a notification alerting them of a failure
                     {
                         trayIcon.BalloonTipTitle = "Server down!";
-                        trayIcon.BalloonTipText = "No response was received from the server!";
+                        trayIcon.BalloonTipText = "No response was received from\n" + siteToMonitor;
+                        trayIcon.ShowBalloonTip(15000);
                         isNotified = !isNotified;
                     }
                 }
