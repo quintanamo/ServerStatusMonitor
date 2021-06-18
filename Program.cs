@@ -1,8 +1,5 @@
 ﻿using ServerStatusMonitor.Properties;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Net.NetworkInformation;
 using System.Configuration;
